@@ -262,15 +262,10 @@ final class AppModel: ObservableObject {
             if currentPage == nil && module.kind == .codex {
                 if let agent = agent(at: index) {
                     tile = DeckRenderer.presentation(for: agent)
-                } else { tile = .init(title: "No thread", subtitle: "—", symbol: "minus", tint: .neutral) }
+                } else { tile = .init(title: "No thread", symbol: "minus", isEmpty: true) }
             } else {
                 let action = currentTiles[index]
-                tile = .init(title: action.label.isEmpty ? "Empty" : action.label, symbol: action.symbol, tint: action.action.kind == .none ? .neutral : .blue)
-                if currentPage == nil, module.kind == .focus, action.action.kind == .focus, action.action.value == "startPause" {
-                    tile.title = focus.state.display; tile.subtitle = focus.state.phase.rawValue.capitalized
-                    tile.symbol = focus.state.phase == .running ? "pause.fill" : "play.fill"
-                    tile.tint = focus.state.phase == .finished ? .green : .purple
-                }
+                tile = DeckRenderer.presentation(for: action, focus: focus.state)
             }
             values[DeckLayout.contentKeys[index]] = tile
         }
@@ -282,7 +277,8 @@ final class AppModel: ObservableObject {
             for index in 0..<12 {
                 let action = live[index]
                 let key = DeckLayout.contentKeys[index]
-                hardware[key] = .init(title: action.label.isEmpty ? "Empty" : action.label, symbol: action.symbol, tint: action.action.kind == .none ? .neutral : .blue, pressed: pressedKey == key)
+                hardware[key] = DeckRenderer.presentation(for: action, focus: focus.state)
+                hardware[key].pressed = pressedKey == key
             }
         }
         hardwareDeck = hardware

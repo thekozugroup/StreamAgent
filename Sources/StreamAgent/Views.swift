@@ -197,11 +197,11 @@ struct SidebarView: View {
 struct DeviceCanvas: View {
     @EnvironmentObject var model: AppModel
     // Headings and physical keys share exactly five equal columns.
-    private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 10), count: 5)
+    private let columns = Array(repeating: GridItem(.fixed(72), spacing: 12), count: 5)
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             if model.module.kind == .codex, model.currentPage == nil {
-                LazyVGrid(columns: columns, spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 12) {
                     Color.clear.frame(maxWidth: .infinity).frame(height: 1)
                     ForEach(0..<4, id: \.self) { column in
                         Menu {
@@ -211,11 +211,12 @@ struct DeviceCanvas: View {
                         } label: { Text(model.projectName(column: column)).font(.caption.weight(.medium)).lineLimit(1).frame(maxWidth: .infinity) }
                         .menuStyle(.borderlessButton)
                         .frame(maxWidth: .infinity)
+                        .help(model.projectName(column: column))
                         .accessibilityIdentifier("codex-project-column-\(column)")
                     }
                 }.padding(.horizontal, 18)
             }
-            LazyVGrid(columns: columns, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(0..<15, id: \.self) { key in
                     if model.deck.indices.contains(key) {
                         DeviceKey(tile: model.deck[key], selected: model.selectedContentIndex == DeckLayout.contentIndex(for: key) && key % 5 > 0, navigation: key % 5 == 0) {
@@ -228,34 +229,31 @@ struct DeviceCanvas: View {
                 }
             }
             .padding(18)
-            .background(RoundedRectangle(cornerRadius: 25, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(.primary.opacity(0.09)))
-            .shadow(color: .black.opacity(0.06), radius: 15, y: 5)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(white: 0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.08)))
         }
+        .frame(width: 444)
+        .frame(maxWidth: .infinity)
     }
 }
 
 struct DeviceKey: View {
+    @Environment(\.displayScale) private var displayScale
     let tile: DeckTilePresentation
     let selected: Bool
     let navigation: Bool
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: tile.symbol).font(.system(size: navigation ? 22 : 28, weight: .medium)).foregroundStyle(Color(nsColor: tile.tint.color == .white ? .secondaryLabelColor : tile.tint.color))
-                    .frame(height: 32)
-                Text(tile.title).font(.system(size: 11, weight: .medium)).lineLimit(2).multilineTextAlignment(.center).frame(height: 27)
-                if !tile.subtitle.isEmpty { Text(tile.subtitle).font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary).lineLimit(1) }
-            }.padding(.horizontal, 4).padding(.vertical, 8)
-                .frame(maxWidth: .infinity).frame(minHeight: 92)
-                .background(RoundedRectangle(cornerRadius: 12).fill(tile.pressed ? Color.accentColor.opacity(0.25) : Color(nsColor: navigation ? .underPageBackgroundColor : .windowBackgroundColor)))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.09), lineWidth: selected ? 2 : 1))
-                .contentShape(RoundedRectangle(cornerRadius: 12))
+            Image(nsImage: DeckRenderer.image(tile, size: Int(72 * displayScale))).resizable().interpolation(.high)
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? Color.accentColor : .white.opacity(0.12), lineWidth: selected ? 2 : 1))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }.buttonStyle(.plain)
             .accessibilityLabel("\(tile.title)\(tile.subtitle.isEmpty ? "" : ", \(tile.subtitle)")")
             .accessibilityHint(navigation ? "Navigate modules" : "Select key. Use Run in the inspector to execute.")
-            .help(navigation ? tile.title : "Select \(tile.title)")
+            .help("\(tile.title)\(tile.subtitle.isEmpty ? "" : " · \(tile.subtitle)")")
     }
 }
 
@@ -285,8 +283,9 @@ struct InspectorView: View {
     }
     private func agentDetail(_ agent: AgentSession) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(agent.status.label, systemImage: agent.status.symbol).font(.headline)
-            Text(agent.title).font(.title3.weight(.medium)).textSelection(.enabled)
+            Label(agent.status.label, systemImage: DeckRenderer.presentation(for: agent).symbol).font(.headline)
+            Text(agent.displayName).font(.title3.weight(.medium)).textSelection(.enabled)
+            if agent.title != agent.displayName { Text(agent.title).font(.callout).textSelection(.enabled) }
             Text(agent.projectName).font(.callout).foregroundStyle(.secondary)
             Text(agent.statusDetail).font(.callout).foregroundStyle(.secondary)
             LabeledContent("Updated", value: agent.updatedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption)
@@ -305,7 +304,7 @@ struct TileEditor: View {
     private let symbols = ["square", "star", "bolt", "app", "folder", "doc", "globe", "keyboard", "terminal", "play.fill", "timer", "heart", "bookmark", "link", "magnifyingglass", "gearshape"]
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            TextField("Label", text: $draft.label).textFieldStyle(.roundedBorder)
+            TextField("Name (inspector only)", text: $draft.label).textFieldStyle(.roundedBorder)
             HStack {
                 Image(systemName: draft.symbol).font(.title2).frame(width: 28)
                 TextField("SF Symbol", text: $draft.symbol).textFieldStyle(.roundedBorder).accessibilityLabel("SF Symbol name")
@@ -408,6 +407,7 @@ struct HelpView: View {
             Label("Your deck, your workflow", systemImage: "square.grid.3x3").font(.title2.weight(.semibold))
             Text("The left column is always Previous module, Show StreamAgent, Next module. Module navigation wraps. The other twelve keys belong to the current page.")
             Text("On screen, select a key and use Run. Hardware keys execute immediately. Add custom pages from the toolbar menu. Choose pages here or from the menu bar.")
+            Text("Key faces use Apple symbols without captions. Hover or select a key for its name and status. Focus numeral symbols choose minutes; the hourglass chooses one hour. Empty keys stay blank.")
             Text("App Controls follows your last external app. Keyboard actions return to that app and require Accessibility access. StreamAgent never requests permissions at startup.")
             Text("Codex shows inferred local metadata states. Empty keys remain empty; no sessions or progress are invented. Use the bank controls for more projects and threads.")
             Text("Closing the window keeps the menu bar and device active. Quit StreamAgent from the menu bar to stop both.")

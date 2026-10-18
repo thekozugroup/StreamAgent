@@ -9,11 +9,12 @@ StreamAgent provides five native controller modules and editable custom pages. T
 - Codex presents four project columns and three agent/chat rows, stable positions, project selection/pinning/order, additional banks, friendly names, and exact validated local-chat links.
 - Media controls, editable app/folder/URL/Apple Shortcut actions, Focus timer, optional keep-awake, custom modules/pages, menu bar, permissions help, and optional login registration.
 - Local atomic configuration, validation, import backups, damaged-file preservation, and consistent save/load size limits.
-- SF Symbols throughout the interface and key images. Original native vector application icon.
+- Apple SF Symbols without key captions. Hardware artwork is exactly 72×72, with proportional centered glyphs, consistent medium weight, and a 15-pixel inset. Mac preview shares the same renderer and square geometry at Retina scale. Unused keys stay blank; names remain in tooltips, VoiceOver, and inspector. Codex states differ by shape as well as color. Original native vector application icon.
+- Focus has an icon and remaining-time ring; exact time remains in the Mac window. Duration presets use numeral SF Symbols and an hourglass for one hour, including on custom pages and live app profiles. Saved custom names remain accessible. Finder and Applications have distinct glyphs, including presentation of older generic defaults without rewriting configuration.
 
 ## Executable evidence
 
-The repaired source passed **67 tests** and a release build. Coverage includes packet layout, input edges, image orientation, bounded/coalesced writes, reconnection replay, read-only WAL metadata, status freshness, stable board positions, fixed navigation, configuration preservation/size limits, focus transitions, and blocked launch deadlines.
+The repaired source passed **72 tests** and a release build. Coverage includes packet layout, input edges, image orientation, bounded/coalesced writes, reconnection replay, read-only WAL metadata, status freshness, stable board positions, fixed navigation, configuration preservation/size limits, focus transitions, and blocked launch deadlines. Design regressions cover caption-free pixels, aspect ratio and edge padding, distinct available status/duration glyphs, retained custom names, old workspace defaults, and skipping metadata-only HID redraws. Independent source review passed after all three icon-design findings were repaired.
 
 The clean staged ZIP passed checksum, strict ad-hoc signature, macOS-only dynamic dependency checks, and the packaged non-GUI smoke check. The installer refuses replacement while StreamAgent runs, verifies staging before mutation, retains the previous app, and restores it if replacement fails. Source SHA and final artifact hashes belong in `dist/delivery.json`, generated after the final commit/build.
 
@@ -24,11 +25,11 @@ The clean staged ZIP passed checksum, strict ad-hoc signature, macOS-only dynami
 - Native UI verified Focus start/pause/reset, custom tile editing and save, saved tile/module restoration after relaunch, clear missing-Accessibility feedback, ordinary folder delivery to Finder, and app-specific Finder controls.
 - The original protected-folder launch freeze was sampled. The repair's five-second timeout and continued native interaction were verified. A delayed OS request cannot create an unbounded queue or freeze device controls.
 - A clean installed candidate at `~/Applications/StreamAgent.app` passed strict signature and smoke checks after native launch. The synced loose app acquired Finder/FileProvider attributes; distribution uses the clean archive instead.
+- After manual unlock, the icon-only native candidate was installed and visually inspected. Square faces have no captions, Retina symbols are crisp, workspace actions are distinguishable, project headings align with content columns, and agent names/statuses remain accessible through the inspector. Project bank forward/back and Focus start/countdown/pause/reset were exercised. The real device remained connected throughout module changes. Final committed artifact and installed-native receipt are recorded in `dist/delivery.json`.
 
 ## Remaining acceptance boundaries
 
-- Final shared-grid alignment is implemented; its final native visual check and candidate upgrade were waiting for the desktop to be unlocked at the last recorded checkpoint. Earlier native screenshots exposed the original alignment defect. Do not treat source geometry alone as final visual proof.
-- Physical key presses, actual device screen orientation, unplug/replug, and real 2017/MK.2 hardware were not observed. Protocol and reconnect tests do not replace those checks.
+- Earlier installed builds' native counters showed 15 and then 2 received presses. The specific physical keys/actions were not observed. Actual device-screen orientation/legibility, unplug/replug, and real 2017/MK.2 hardware remain manual checks. Native preview and protocol tests do not replace physical-screen confirmation.
 - Accessibility was not granted by automation. Successful keyboard/media delivery with that permission, launch-at-login registration, and arbitrary Apple Shortcuts remain user-controlled checks.
 - Exact Codex URLs were accepted by macOS, but CUA disallowed inspecting the Codex destination app. Remote/cloud-only chats are outside the local metadata adapter.
 - Modern Codex SQLite does not establish approval waiting. Thinking requires observed open reasoning-item metadata; stale running evidence becomes Unknown after 120 seconds. Done means the latest observed turn completed, not the entire project. Older chats outside the bounded metadata window may be omitted.

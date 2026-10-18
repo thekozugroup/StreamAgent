@@ -251,11 +251,60 @@ final class ActionAndFocusTests: XCTestCase {
         let cache = Dictionary(uniqueKeysWithValues: old.enumerated().map { ($0.offset, $0.element) })
         XCTAssertEqual(DeckDiff.changedKeys(previous: cache, current: old), [])
         var changed = old; changed[1].title = "24:59"
+        XCTAssertEqual(DeckDiff.changedKeys(previous: cache, current: changed), [])
+        changed[1].symbol = "play.fill"
         XCTAssertEqual(DeckDiff.changedKeys(previous: cache, current: changed), [1])
     }
     func testRendererProducesNativePixels() {
         let image = DeckRenderer.image(.init(title: "Working", subtitle: "Local", symbol: "gearshape", tint: .blue))
-        XCTAssertEqual(image.size.width, 144)
+        XCTAssertEqual(image.size.width, 72)
         XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 0)
+    }
+    func testKeyPixelsNeverContainNamesOrStatusCaptions() throws {
+        let original = DeckTilePresentation(title: "Private agent name", subtitle: "Working", symbol: "arrow.triangle.2.circlepath", tint: .blue)
+        var renamed = original; renamed.title = "Different project and agent"; renamed.subtitle = "Different status caption"
+        XCTAssertEqual(try XCTUnwrap(DeckRenderer.image(original).tiffRepresentation), try XCTUnwrap(DeckRenderer.image(renamed).tiffRepresentation))
+        var empty = original; empty.isEmpty = true
+        renamed.isEmpty = true; renamed.symbol = "folder"; renamed.tint = .red
+        XCTAssertEqual(DeckRenderer.image(empty).tiffRepresentation, DeckRenderer.image(renamed).tiffRepresentation)
+    }
+    func testWideAndTallSymbolsFitWithoutStretchingOrEdgeClipping() {
+        let bounds = NSRect(x: 0, y: 0, width: 72, height: 72)
+        for size in [NSSize(width: 60, height: 20), NSSize(width: 20, height: 60)] {
+            let rect = DeckRenderer.symbolRect(for: size, in: bounds, inset: DeckRenderer.symbolInset)
+            XCTAssertEqual(rect.width / rect.height, size.width / size.height, accuracy: 0.001)
+            XCTAssertEqual(rect.midX, 36); XCTAssertEqual(rect.midY, 36)
+            XCTAssertTrue(bounds.insetBy(dx: 15, dy: 15).contains(rect))
+        }
+    }
+    func testAllAgentStatesHaveDistinctAvailableAppleSymbols() {
+        let symbols = AgentStatus.allCases.map { status in
+            DeckRenderer.presentation(for: AgentSession(id: "agent", title: "Agent", projectPath: "/project", projectName: "Project", status: status, updatedAt: Date(), statusDetail: "Fixture")).symbol
+        }
+        XCTAssertEqual(Set(symbols).count, AgentStatus.allCases.count)
+        for name in symbols { XCTAssertNotNil(NSImage(systemSymbolName: name, accessibilityDescription: nil), name) }
+    }
+    func testGenericFocusPresetsStayDistinctAcrossAnyActionPage() {
+        let symbols = ["5", "15", "25", "45", "60"].map { minutes in
+            DeckRenderer.presentation(for: .command("Duration", "timer", .focus, minutes), focus: FocusState()).symbol
+        }
+        XCTAssertEqual(Set(symbols).count, 5)
+        for name in symbols { XCTAssertNotNil(NSImage(systemSymbolName: name, accessibilityDescription: nil), name) }
+        let customized = ActionTile.command("Duration", "star", .focus, "25")
+        XCTAssertEqual(DeckRenderer.presentation(for: customized, focus: FocusState()).symbol, "star")
+        var state = FocusState(); state.toggle()
+        let start = DeckRenderer.presentation(for: .command("Start", "playpause", .focus, "startPause"), focus: state)
+        XCTAssertEqual(start.symbol, "pause.fill"); XCTAssertEqual(start.progress, 1)
+        XCTAssertEqual(start.title, "Start · 25:00")
+        XCTAssertEqual(DeckRenderer.presentation(for: .command("", "playpause", .focus, "startPause"), focus: state).title, "Start / Pause · 25:00")
+    }
+    func testLegacyWorkspaceDefaultsGainDistinctFacesWithoutChangingSavedTiles() {
+        let finder = ActionTile.command("Finder", "folder", .openApp, "com.apple.finder")
+        let apps = ActionTile.command("Applications", "folder", .openFile, "/Applications")
+        let finderFace = DeckRenderer.presentation(for: finder, focus: FocusState())
+        let appsFace = DeckRenderer.presentation(for: apps, focus: FocusState())
+        XCTAssertNotEqual(finderFace.symbol, appsFace.symbol)
+        XCTAssertEqual(finder.symbol, "folder"); XCTAssertEqual(apps.symbol, "folder")
+        for name in [finderFace.symbol, appsFace.symbol] { XCTAssertNotNil(NSImage(systemSymbolName: name, accessibilityDescription: nil), name) }
     }
 }

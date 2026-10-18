@@ -166,9 +166,9 @@ struct AppConfiguration: Codable, Equatable {
             .command("Volume down", "speaker.wave.1.fill", .media, "volumeDown"), .command("Volume up", "speaker.wave.3.fill", .media, "volumeUp")
         ]))
         let work = ModuleConfiguration(kind: .workspaces, name: "Workspaces", tiles: ActionTile.padded([
-            .command("Finder", "folder", .openApp, "com.apple.finder"),
+            .command("Finder", "macwindow", .openApp, "com.apple.finder"),
             .command("Safari", "safari", .openApp, "com.apple.Safari"),
-            .command("Applications", "folder", .openFile, "/Applications"),
+            .command("Applications", "square.grid.2x2", .openFile, "/Applications"),
             .command("Apple", "globe", .openURL, "https://www.apple.com")
         ]))
         let focus = ModuleConfiguration(kind: .focus, name: "Focus", tiles: ActionTile.padded([

@@ -1,0 +1,7 @@
+.build/
+dist/
+.DS_Store
+.a5c/node_modules/
+.a5c/runs/
+.a5c/evidence/
+*.xcuserstate

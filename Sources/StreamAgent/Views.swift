@@ -77,7 +77,7 @@ struct MainView: View {
             DeviceCanvas()
             HStack(spacing: 6) {
                 Image(systemName: "cursorarrow.and.square.on.square.dashed")
-                Text("Select a key to inspect. Use Run to execute.")
+                Text(model.module.kind == .codex && model.currentPage == nil ? "Corner color: project. Marks: thread row. Select a key to inspect." : "Select a key to inspect. Use Run to execute.")
             }.font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
             Spacer(minLength: 0)
             HStack(spacing: 8) {
@@ -204,15 +204,32 @@ struct DeviceCanvas: View {
                 LazyVGrid(columns: columns, spacing: 12) {
                     Color.clear.frame(maxWidth: .infinity).frame(height: 1)
                     ForEach(0..<4, id: \.self) { column in
+                        HStack(spacing: 4) {
+                            if let identity = model.projectIdentity(column: column) {
+                                Circle().fill(Color(nsColor: identity.color)).frame(width: 6, height: 6).accessibilityHidden(true)
+                            }
                         Menu {
+                            if model.projectIdentity(column: column) != nil {
+                                Menu {
+                                    ForEach(0..<KeyIdentity.paletteCount, id: \.self) { color in
+                                        Button { model.setProjectColor(color, column: column) } label: {
+                                            Label(KeyIdentity.colorNames[color], systemImage: model.projectIdentity(column: column)?.colorIndex == color ? "checkmark" : "circle")
+                                        }
+                                    }
+                                } label: { Label("Project color", systemImage: "paintpalette") }
+                                Divider()
+                            }
                             ForEach(model.monitor.projects) { project in Button(project.name) { model.chooseProject(project.id, column: column) } }
                             Divider()
                             Button("Manage projects…") { model.showingProjects = true }
-                        } label: { Text(model.projectName(column: column)).font(.caption.weight(.medium)).lineLimit(1).frame(maxWidth: .infinity) }
+                        } label: {
+                            Text(model.projectName(column: column)).font(.caption.weight(.medium)).lineLimit(1).frame(maxWidth: .infinity)
+                        }
                         .menuStyle(.borderlessButton)
                         .frame(maxWidth: .infinity)
-                        .help(model.projectName(column: column))
+                        .help("\(model.projectName(column: column))\(model.projectIdentity(column: column).map { " · \($0.colorName) corner" } ?? "") · Choose project or color")
                         .accessibilityIdentifier("codex-project-column-\(column)")
+                        }.frame(maxWidth: .infinity)
                     }
                 }.padding(.horizontal, 18)
             }
@@ -239,6 +256,7 @@ struct DeviceCanvas: View {
 
 struct DeviceKey: View {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let tile: DeckTilePresentation
     let selected: Bool
     let navigation: Bool
@@ -250,6 +268,8 @@ struct DeviceKey: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? Color.accentColor : .white.opacity(0.12), lineWidth: selected ? 2 : 1))
                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .scaleEffect(tile.pressed ? 0.96 : 1)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tile.pressed)
         }.buttonStyle(.plain)
             .accessibilityLabel("\(tile.title)\(tile.subtitle.isEmpty ? "" : ", \(tile.subtitle)")")
             .accessibilityHint(navigation ? "Navigate modules" : "Select key. Use Run in the inspector to execute.")
@@ -409,7 +429,8 @@ struct HelpView: View {
             Text("On screen, select a key and use Run. Hardware keys execute immediately. Add custom pages from the toolbar menu. Choose pages here or from the menu bar.")
             Text("Key faces use Apple symbols without captions. Hover or select a key for its name and status. Focus numeral symbols choose minutes; the hourglass chooses one hour. Empty keys stay blank.")
             Text("App Controls follows your last external app. Keyboard actions return to that app and require Accessibility access. StreamAgent never requests permissions at startup.")
-            Text("Codex shows inferred local metadata states. Empty keys remain empty; no sessions or progress are invented. Use the bank controls for more projects and threads.")
+            Text("Codex corner colors identify projects; one, two, or three marks identify thread rows. Change colors from project headings. Center symbols show inferred local status. Use banks for more projects and threads.")
+            Text("A small dot marks running apps; a check marks the current app or selected duration. Locks mean Accessibility access is needed. Brief action badges show pending, sent, or failed. Output volume and mute reflect available system readings.")
             Text("Closing the window keeps the menu bar and device active. Quit StreamAgent from the menu bar to stop both.")
             DisclosureGroup("Advanced: local metadata source") {
                 Text(model.monitor.statusMessage).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)

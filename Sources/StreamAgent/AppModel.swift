@@ -21,7 +21,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var actionRunning = false
     let device = StreamDeckDevice()
     let monitor = CodexMonitor()
-    let tracker = ExternalAppTracker()
+    let tracker: ExternalAppTracker
+    let context = KeyContextMonitor()
     let store: ConfigurationStore
     let focus: FocusController
     let runner: ActionRunner
@@ -29,23 +30,34 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var sent: [Int: DeckTilePresentation] = [:]
     private var feedbackGeneration = 0
+    private struct OperationFeedback {
+        var token = UUID()
+        var accessory: DeckTilePresentation.Accessory
+    }
+    private var operationFeedback: [String: OperationFeedback] = [:]
+    private var inFlight = Set<String>()
+    private var keyboardActionRunning = false
     var showWindow: (() -> Void)?
 
-    init(store: ConfigurationStore = ConfigurationStore()) {
+    init(store: ConfigurationStore = ConfigurationStore(), tracker: ExternalAppTracker? = nil,
+         keyboardSender: ActionRunner.KeyboardSender? = nil) {
+        let tracker = tracker ?? ExternalAppTracker()
         self.store = store
+        self.tracker = tracker
         let loaded: AppConfiguration
         var loadError: String?
         do { loaded = try store.load() }
         catch { loaded = .defaults(); loadError = "Your configuration could not be loaded. The original file is preserved. Temporary defaults are shown. \(error.localizedDescription)" }
         configuration = loaded
         focus = FocusController(minutes: loaded.focusMinutes, keepAwake: loaded.keepAwake)
-        runner = ActionRunner(tracker: tracker)
+        runner = ActionRunner(tracker: tracker, keyboardSender: keyboardSender)
         errorMessage = loadError
         runner.focusAction = { [weak self] value in
             guard let self else { return }; self.focus.perform(value)
             if let minutes = Int(value) { self.update { $0.focusMinutes = minutes } }
         }
         focus.changed = { [weak self] in self?.refreshDeck() }
+        context.didChange = { [weak self] in self?.refreshDeck() }
         tracker.didChange = { [weak self] in
             guard let self else { return }
             if self.configuration.autoSwitchToAppControls, let module = self.configuration.modules.first(where: { $0.kind == .appControls }) { self.selectModule(module.id) }
@@ -60,13 +72,13 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             if connected { self.sent.removeAll(); self.device.clearImageCache(); self.device.setBrightness(self.configuration.brightness); self.refreshDeck() }
         }.store(in: &cancellables)
-        for publisher in [device.objectWillChange.eraseToAnyPublisher(), monitor.objectWillChange.eraseToAnyPublisher(), tracker.objectWillChange.eraseToAnyPublisher(), focus.objectWillChange.eraseToAnyPublisher()] {
+        for publisher in [device.objectWillChange.eraseToAnyPublisher(), monitor.objectWillChange.eraseToAnyPublisher(), tracker.objectWillChange.eraseToAnyPublisher(), focus.objectWillChange.eraseToAnyPublisher(), context.objectWillChange.eraseToAnyPublisher()] {
             publisher.receive(on: RunLoop.main).sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         }
         refreshDeck()
     }
-    func start() { device.start(); monitor.start() }
-    func stop() { device.stop(); monitor.stop(); focus.stop() }
+    func start() { context.start(); device.start(); monitor.start() }
+    func stop() { device.stop(); monitor.stop(); focus.stop(); context.stop() }
     var module: ModuleConfiguration { configuration.modules.first(where: { $0.id == configuration.selectedModuleID }) ?? configuration.modules[0] }
     var currentPage: ActionPage? { module.pages.first { $0.id == selectedPageID } }
     var pageTitle: String { currentPage?.name ?? module.name }
@@ -170,6 +182,8 @@ final class AppModel: ObservableObject {
     func setBrightness(_ value: Int) { update { $0.brightness = value }; device.setBrightness(value) }
     func reconcileProjects() {
         board.reconcile(projects: monitor.projects.map { ($0.id, $0.sessions.map(\.id)) }, preferred: configuration.codexProjectOrder, pinned: configuration.pinnedProjectIDs)
+        let colors = ProjectColors.assigning(board.projectIDs, to: configuration.projectColorAssignments ?? [:])
+        if colors != configuration.projectColorAssignments, !colors.isEmpty { update { $0.projectColorAssignments = colors } }
         if projectBank >= board.bankCount { projectBank = max(0, board.bankCount - 1) }
         if threadBank > maxThreadBank { threadBank = maxThreadBank }
         refreshDeck()
@@ -204,6 +218,15 @@ final class AppModel: ObservableObject {
         guard let id = board.projectID(column: column, bank: projectBank) else { return "Choose project" }
         return monitor.projects.first { $0.id == id }?.name ?? "Unavailable"
     }
+    func projectIdentity(column: Int, row: Int = 0) -> KeyIdentity? {
+        guard let id = board.projectID(column: column, bank: projectBank),
+              let color = configuration.projectColorAssignments?[id] else { return nil }
+        return KeyIdentity(colorIndex: color, threadOrdinal: row + 1)
+    }
+    func setProjectColor(_ color: Int, column: Int) {
+        guard let id = board.projectID(column: column, bank: projectBank), (0..<KeyIdentity.paletteCount).contains(color) else { return }
+        update { $0.projectColorAssignments = ($0.projectColorAssignments ?? [:]).merging([id: color]) { _, new in new } }
+    }
     func nextProjectBank(_ delta: Int) { threadBank = 0; projectBank = DeckLayout.adjacentIndex(projectBank, delta: delta, count: board.bankCount) }
     func runSelected() {
         guard let index = selectedContentIndex else { return }
@@ -233,8 +256,11 @@ final class AppModel: ObservableObject {
         return currentTiles[index].action
     }
     private func executeContent(_ index: Int, physical: Bool = false) {
-        guard (0..<12).contains(index), !actionRunning else { return }
+        guard (0..<12).contains(index) else { return }
+        let feedbackID = operationID(at: index, physical: physical)
+        guard !inFlight.contains(feedbackID) else { return }
         let operation: () async throws -> Void
+        var isKeyboard = false
         if currentPage == nil && module.kind == .codex {
             guard let session = agent(at: index), let url = session.deepLink else {
                 errorMessage = "No available Codex thread is assigned to this key."; return
@@ -243,13 +269,49 @@ final class AppModel: ObservableObject {
         } else {
             // Hardware rendering and execution share the live profile route.
             let action = physical ? physicalAction(at: index) : currentTiles[index].action
-            guard let action else { return }
-            operation = { try await self.runner.run(action) }
+            guard let action, action.kind != .none else { return }
+            isKeyboard = action.kind == .keyboard
+            guard !isKeyboard || !keyboardActionRunning else { return }
+            let target = tracker.lastApplication
+            operation = { try await self.runner.run(action, target: target) }
         }
-        actionRunning = true
+        if isKeyboard { keyboardActionRunning = true }
+        inFlight.insert(feedbackID); actionRunning = true
+        operationFeedback[feedbackID] = .init(accessory: .busy); refreshDeck()
         Task { @MainActor in
-            defer { actionRunning = false }
-            do { try await operation() } catch { errorMessage = error.localizedDescription; showWindow?() }
+            var outcome: DeckTilePresentation.Accessory = .success
+            do { try await operation() }
+            catch { outcome = .failure; errorMessage = error.localizedDescription; showWindow?() }
+            if isKeyboard { keyboardActionRunning = false }
+            inFlight.remove(feedbackID); actionRunning = !inFlight.isEmpty
+            let feedback = OperationFeedback(accessory: outcome)
+            operationFeedback[feedbackID] = feedback; refreshDeck()
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            if operationFeedback[feedbackID]?.token == feedback.token {
+                operationFeedback.removeValue(forKey: feedbackID); refreshDeck()
+            }
+        }
+    }
+    // Feedback follows the actual action and destination, never the physical slot.
+    private func operationID(at index: Int, physical: Bool = false) -> String {
+        if currentPage == nil, module.kind == .codex { return "codex|\(agent(at: index)?.id ?? "empty-\(index)")" }
+        let live = currentPage == nil && module.kind == .appControls
+        let profile = live ? AppControlRouting.profile(in: configuration, targetBundle: tracker.bundleIdentifier, editingProfileID: editingProfileID, physical: physical) : nil
+        let tile = profile?.tiles[index] ?? currentTiles[index]
+        let destination = tile.action.kind == .keyboard ? String(tracker.lastApplication?.processIdentifier ?? 0) : ""
+        return "\(module.id)|\(currentPage?.id ?? "main")|\(profile?.id ?? "")|\(destination)|\(tile.id)|\(tile.action)"
+    }
+    private func decorateFeedback(_ tile: inout DeckTilePresentation, at index: Int, physical: Bool = false) {
+        if let feedback = operationFeedback[operationID(at: index, physical: physical)], !tile.isEmpty {
+            tile.accessory = feedback.accessory
+            let label: String
+            switch feedback.accessory {
+            case .busy: label = "Action pending"
+            case .success: label = "Action sent"
+            case .failure: label = "Action failed"
+            default: label = ""
+            }
+            if !label.isEmpty { tile.subtitle += tile.subtitle.isEmpty ? label : " · \(label)" }
         }
     }
     func refreshDeck() {
@@ -262,11 +324,14 @@ final class AppModel: ObservableObject {
             if currentPage == nil && module.kind == .codex {
                 if let agent = agent(at: index) {
                     tile = DeckRenderer.presentation(for: agent)
+                    tile.identity = projectIdentity(column: index % 4, row: index / 4)
+                    tile.subtitle += " · \(projectName(column: index % 4)) · Thread \(threadBank * 3 + index / 4 + 1)"
                 } else { tile = .init(title: "No thread", symbol: "minus", isEmpty: true) }
             } else {
                 let action = currentTiles[index]
-                tile = DeckRenderer.presentation(for: action, focus: focus.state)
+                tile = DeckRenderer.contextualPresentation(for: action, focus: focus.state, context: context.snapshot, targetBundle: tracker.bundleIdentifier)
             }
+            decorateFeedback(&tile, at: index)
             values[DeckLayout.contentKeys[index]] = tile
         }
         if let pressedKey, values.indices.contains(pressedKey) { values[pressedKey].pressed = true }
@@ -277,7 +342,8 @@ final class AppModel: ObservableObject {
             for index in 0..<12 {
                 let action = live[index]
                 let key = DeckLayout.contentKeys[index]
-                hardware[key] = DeckRenderer.presentation(for: action, focus: focus.state)
+                hardware[key] = DeckRenderer.contextualPresentation(for: action, focus: focus.state, context: context.snapshot, targetBundle: tracker.bundleIdentifier)
+                decorateFeedback(&hardware[key], at: index, physical: true)
                 hardware[key].pressed = pressedKey == key
             }
         }

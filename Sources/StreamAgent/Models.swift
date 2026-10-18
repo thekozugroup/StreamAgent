@@ -157,6 +157,8 @@ struct AppConfiguration: Codable, Equatable {
     var focusMinutes = 25
     var keepAwake = false
     var autoSwitchToAppControls = false
+    // Optional keeps configurations exported by earlier releases readable.
+    var projectColorAssignments: [String: Int]?
     static func defaults() -> AppConfiguration {
         let app = ModuleConfiguration(kind: .appControls, name: "App Controls")
         let codex = ModuleConfiguration(kind: .codex, name: "Codex")
@@ -201,6 +203,11 @@ struct AppConfiguration: Codable, Equatable {
     }
     func validate() throws {
         guard version == 1 else { throw ConfigurationError.invalid("This configuration version is not supported.") }
+        if let colors = projectColorAssignments {
+            guard colors.count <= 10_000, colors.allSatisfy({ !$0.key.isEmpty && $0.key.count <= 2_000 && (0..<KeyIdentity.paletteCount).contains($0.value) }) else {
+                throw ConfigurationError.invalid("Project colors contain invalid assignments.")
+            }
+        }
         guard (1...40).contains(modules.count), Set(modules.map(\.id)).count == modules.count,
               modules.contains(where: { $0.id == selectedModuleID }), (0...100).contains(brightness), (1...240).contains(focusMinutes) else {
             throw ConfigurationError.invalid("Configuration contains invalid modules, brightness, or focus duration.")

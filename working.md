@@ -19,6 +19,16 @@ Full requested device/page/agent scope retained. Desktop UI implementation + TDD
 
 ## Current
 
+### Context and corner identity iteration
+
+- Requested: small top-right project-color notch, rounded inner corner, thread cues; more dynamic, contextual, polished keys. Preserve icon-only Apple symbols and fixed navigation.
+- Design: persist project colors through reorder/banks/restarts, let project menus override color; one/two/three marks identify thread rows. Status shape stays independent of project hue. Empty keys remain empty.
+- Context: actual running apps, public CoreAudio output volume/mute, selected focus preset, permission lock, per-action busy/success/failure feedback. No fabricated playback or agent states. Brief press response respects Reduce Motion.
+- Delivery gates: configuration migration, marker pixels and diffing, contextual routing/feedback tests, independent review, native 72-point/Retina preview, exact committed package/install/signature, live device image delivery. Physical LCD legibility/orientation remains a human observation boundary.
+- Process: `01M56G10P1JV5D3JM8WT86A1MS`, composed from desktop UI implementation and TDD convergence library patterns. Scope matches request, no reduced-scope recovery; integration/review repair loops and exact-release acceptance retained. Existing run completed successfully. User asked continuous autonomous work; continue while hook reports no hooks configured.
+- Completed implementation and integration: 106 tests and release build passed. Native QA found and fixed swallowed project dots inside menu labels and weak disabled-icon contrast. Color selection persisted across banks/relaunch; native timer action/feedback/countdown/reset passed. Output audio and missing Accessibility state matched native metadata. Original seven modules, six profiles, and 50% brightness retained.
+- Independent review repairs: capture keyboard destination before the asynchronous task; include process identity in feedback on all keyboard pages; resolve chosen app paths to bundle IDs. Regression tests cover each case. Final exact-commit archive/install receipt remains in ignored `dist/delivery.json`.
+
 Icon-only redesign implemented and independently reviewed. Hardware uses 72×72 Apple SF Symbol artwork without captions; compact square Mac preview shares the renderer at Retina scale. Names remain in tooltips, VoiceOver, and inspector. Native candidate, 72 tests, release build, and package checks passed. Exact committed/installed delivery evidence belongs in ignored `dist/delivery.json`. Babysitter run `01M568661SBNZM3WNWAGCHE6R0` tracks delivery.
 
 - After unlock, the earlier final candidate installed cleanly and native screenshot confirmed project headings align with the four key columns. Connection and 509 live chats remained available. The previously running build had received 15 key presses; no specific physical action/orientation claim follows from the counter alone.
@@ -33,4 +43,4 @@ Icon-only redesign implemented and independently reviewed. Hardware uses 72×72 
 - Independent review found and repaired: unequal heading/key columns (now shared grid), save/load size mismatch (now identical 5,000,000-byte limits before mutation), and synced bundle signature contamination (now clean staged signed ZIP + verified installer).
 - Clean archive checksum, strict signature, system-only dependencies, and smoke check passed. ZIP is the immutable deliverable; synced loose app is only a convenience copy. Installer refuses while an app runs and preserves prior installed versions.
 - Installed native app: `~/Applications/StreamAgent.app`. Installer preserved earlier candidates and user configuration. Desktop lock was cleared manually by the user; no security settings were changed.
-- Private remote: https://github.com/thekozugroup/StreamAgent. Commit/push identity: thekozugroup <thekozugroup@gmail.com>. Final source SHA, artifact hashes, and exact installed verification are recorded in ignored `dist/delivery.json` after commit/rebuild.
+- Public remote, explicitly requested by user: https://github.com/thekozugroup/StreamAgent. Commit/push identity: thekozugroup <thekozugroup@gmail.com>. Final source SHA, artifact hashes, and exact installed verification are recorded in ignored `dist/delivery.json` after commit/rebuild.
